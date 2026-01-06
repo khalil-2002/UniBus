@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "19112453363",
+    "project_id": "appunibus",
+    "storage_bucket": "appunibus.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:19112453363:android:1057627c993b68347a0386",
+        "android_client_info": {
+          "package_name": "com.example.app_univ_bus"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgWgCnAHqg8gs8p_0o_hVpirmJMBFn1-g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
