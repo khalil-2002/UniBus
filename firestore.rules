@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- USERS ---
+    match /users/{userId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+    }
+
+    // --- TRAJETS ---
+    match /trajets/{trajetId} {
+      // Lecture : tout le monde
+      allow update: if request.auth != null; // ⚠️ à affiner pour éviter abus
+      allow read: if true;
+
+      // Création / modification / suppression : seulement les admins
+      allow create, update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // --- RESERVATIONS ---
+    match /reservations/{reservationId} {
+      // Lecture : admin OU propriétaire
+      allow read: if request.auth != null
+        && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+            || resource.data.userId == request.auth.uid);
+
+      // Création : utilisateur connecté qui réserve pour lui-même
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+
+      // Modification / suppression : admin OU propriétaire
+      allow update, delete: if request.auth != null
+        && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+            || resource.data.userId == request.auth.uid);
+    }
+  }
+}

@@ -37,12 +37,14 @@ class _RegisterPageState extends State<RegisterPage> {
       if (user != null) {
         // 2️⃣ Sauvegarder les infos supplémentaires dans Firestore
        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid, // ✅ champ UID ajouté
           'nom': nameController.text.trim(),
           'telephone': phoneController.text.trim(),
           'email': emailController.text.trim(),
           'role': 'user', // ✅ rôle par défaut
           'createdAt': FieldValue.serverTimestamp(),
         });
+
 
 
         ScaffoldMessenger.of(context).showSnackBar(

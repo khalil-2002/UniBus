@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class AddTrajetPage extends StatefulWidget {
   const AddTrajetPage({super.key});
@@ -12,11 +13,11 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
   final departController = TextEditingController();
   final destinationController = TextEditingController();
   final placesController = TextEditingController();
-  final horaireController = TextEditingController();
-
+  final prixController = TextEditingController(); // ✅ nouveau contrôleur
   final List<TextEditingController> arretsDepartControllers = [];
   final List<TextEditingController> arretsArriveeControllers = [];
 
+  DateTime? horaire; // ✅ remplace le TextField par un DateTime
   bool isLoading = false;
 
   @override
@@ -24,7 +25,6 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
     departController.dispose();
     destinationController.dispose();
     placesController.dispose();
-    horaireController.dispose();
     for (var c in arretsDepartControllers) c.dispose();
     for (var c in arretsArriveeControllers) c.dispose();
     super.dispose();
@@ -38,11 +38,37 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
     setState(() => arretsArriveeControllers.add(TextEditingController()));
   }
 
+  Future<void> _selectHoraire(BuildContext context) async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: horaire ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (pickedDate != null) {
+      final pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(horaire ?? DateTime.now()),
+      );
+      if (pickedTime != null) {
+        setState(() {
+          horaire = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+        });
+      }
+    }
+  }
+
   Future<void> _saveTrajet() async {
     if (departController.text.isEmpty ||
         destinationController.text.isEmpty ||
         placesController.text.isEmpty ||
-        horaireController.text.isEmpty) {
+        horaire == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Veuillez remplir tous les champs")),
       );
@@ -65,6 +91,7 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
       );
       return;
     }
+    
 
     setState(() => isLoading = true);
 
@@ -73,10 +100,12 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
         'depart': departController.text.trim(),
         'destination': destinationController.text.trim(),
         'places_disponibles': int.parse(placesController.text.trim()),
-        'horaire': DateTime.parse(horaireController.text.trim()),
+        'horaire': horaire,
         'arrets_depart': arretsDepart,
         'arrets_arrivee': arretsArrivee,
+        'prix': int.parse(prixController.text.trim()), // ✅ nouveau champ
       });
+
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Trajet ajouté ✅")),
@@ -102,7 +131,26 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
             TextField(controller: departController, decoration: const InputDecoration(labelText: "Ville de départ")),
             TextField(controller: destinationController, decoration: const InputDecoration(labelText: "Ville d'arrivée")),
             TextField(controller: placesController, decoration: const InputDecoration(labelText: "Nombre de places"), keyboardType: TextInputType.number),
-            TextField(controller: horaireController, decoration: const InputDecoration(labelText: "Horaire (ex: 2026-01-05 14:30)")),
+            TextField(
+              controller: prixController,
+              decoration: const InputDecoration(labelText: "Prix du trajet (FCFA)"),
+              keyboardType: TextInputType.number,
+            ),
+
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.access_time, color: Colors.indigo),
+              title: Text(
+                horaire == null
+                    ? "Choisir un horaire"
+                    : "Horaire: ${DateFormat('dd/MM/yyyy HH:mm').format(horaire!)}",
+              ),
+              trailing: ElevatedButton(
+                onPressed: () => _selectHoraire(context),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                child: const Text("Calendrier"),
+              ),
+            ),
 
             const SizedBox(height: 20),
             const Text("Arrêts de la ville de départ"),

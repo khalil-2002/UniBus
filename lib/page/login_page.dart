@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/my_transparent_textfield.dart';
 import '../services/auth_service.dart';
-import 'home_page.dart';
 import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -17,6 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
+  bool showPassword = false;
 
   @override
   void dispose() {
@@ -25,26 +25,42 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  /// 🔑 Affichage des messages SnackBar
+  void _showMessage(String text, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), backgroundColor: color),
+    );
+  }
+
   /// 🔑 Connexion avec récupération du rôle
   Future<void> _login() async {
-    if (emailController.text.isEmpty || passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Veuillez remplir tous les champs")),
-      );
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage("Veuillez remplir tous les champs", Colors.red);
+      return;
+    }
+
+    // Validation email simple
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (!emailRegex.hasMatch(email)) {
+      _showMessage("Adresse e-mail invalide", Colors.red);
+      return;
+    }
+
+    if (password.length < 6) {
+      _showMessage("Le mot de passe doit contenir au moins 6 caractères", Colors.red);
       return;
     }
 
     setState(() => isLoading = true);
 
     try {
-      await AuthService().login(
-        emailController.text.trim(),
-        passwordController.text.trim(),
-      );
+      await AuthService().login(email, password);
 
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Récupérer le rôle depuis Firestore
         final snap = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -52,20 +68,29 @@ class _LoginPageState extends State<LoginPage> {
 
         final role = snap.data()?['role'] ?? 'user';
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Connexion réussie ✅")),
-        );
+        _showMessage("Connexion réussie ✅", Colors.green);
 
-        // Navigation vers HomePage avec rôle
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomePage(role: role)),
-        );
+        // ✅ Navigation avec routes définies dans main.dart
+        Navigator.pushReplacementNamed(context, '/home', arguments: role);
       }
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = "Utilisateur introuvable";
+          break;
+        case 'wrong-password':
+          message = "Mot de passe incorrect";
+          break;
+        case 'invalid-email':
+          message = "Email invalide";
+          break;
+        default:
+          message = "Erreur : ${e.message}";
+      }
+      _showMessage(message, Colors.red);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur : ${e.toString()}")),
-      );
+      _showMessage("Erreur inattendue : ${e.toString()}", Colors.red);
     } finally {
       setState(() => isLoading = false);
     }
@@ -73,23 +98,16 @@ class _LoginPageState extends State<LoginPage> {
 
   /// 🔑 Réinitialisation du mot de passe
   Future<void> _resetPassword() async {
-    if (emailController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Entrez votre email pour réinitialiser")),
-      );
+    final email = emailController.text.trim();
+    if (email.isEmpty) {
+      _showMessage("Entrez votre email pour réinitialiser", Colors.red);
       return;
     }
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: emailController.text.trim(),
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email de réinitialisation envoyé ✅")),
-      );
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      _showMessage("Email de réinitialisation envoyé ✅", Colors.green);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur : ${e.toString()}")),
-      );
+      _showMessage("Erreur : ${e.toString()}", Colors.red);
     }
   }
 
@@ -102,7 +120,7 @@ class _LoginPageState extends State<LoginPage> {
           Container(
             decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/bus_background.jpg'),
+                image: AssetImage('assets/bus_background1.jpg'),
                 fit: BoxFit.cover,
               ),
             ),
@@ -140,16 +158,38 @@ class _LoginPageState extends State<LoginPage> {
                     labeltext: "Email",
                     hinttext: "Entrez votre adresse e-mail",
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 20),
 
-                  // Champ Mot de passe
-                  MyTransparentTextField(
+                  // Champ Mot de passe avec bouton 👁️
+                  TextField(
                     controller: passwordController,
-                    prefixIcon: Icons.lock,
-                    labeltext: "Mot de passe",
-                    hinttext: "Entrez votre mot de passe",
-                    isPassword: true,
+                    obscureText: !showPassword,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.lock, color: Colors.white),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          showPassword ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            showPassword = !showPassword;
+                          });
+                        },
+                      ),
+                      labelText: "Mot de passe",
+                      labelStyle: const TextStyle(color: Colors.white),
+                      hintText: "Entrez votre mot de passe",
+                      hintStyle: const TextStyle(color: Colors.white70),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.2),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 30),
@@ -164,7 +204,7 @@ class _LoginPageState extends State<LoginPage> {
                         "Mot de passe oublié ?",
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 16,
                           fontWeight: FontWeight.w300,
                         ),
                       ),
@@ -183,7 +223,7 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      onPressed: _login,
+                      onPressed: isLoading ? null : _login,
                       child: isLoading
                           ? const CircularProgressIndicator(color: Colors.indigo)
                           : const Text(

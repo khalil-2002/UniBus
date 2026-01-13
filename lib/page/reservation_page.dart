@@ -47,7 +47,6 @@ class _ReservationPageState extends State<ReservationPage> {
     passengerPhoneController.dispose();
     super.dispose();
   }
-
   Future<void> _loadUserInfo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -126,6 +125,36 @@ class _ReservationPageState extends State<ReservationPage> {
 
       final trajetRef = FirebaseFirestore.instance.collection('trajets').doc(widget.trajetId);
       final reservationsRef = FirebaseFirestore.instance.collection('reservations');
+      // Récupérer le rôle de l'utilisateur connecté
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        final userRole = userDoc.data()?['role'] ?? 'user'; // valeur par défaut = user
+
+
+          // Vérifier combien de réservations en attente existent déjà pour cet utilisateur
+        final existing = await reservationsRef
+            .where('userId', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'en attente')
+            .get();
+
+        // 🔧 Définir la limite en fonction du rôle
+        int maxPendingReservations;
+        if (userRole == "admin") {
+          maxPendingReservations = 5; // les admins peuvent avoir plus de réservations en attente
+        } else {
+          maxPendingReservations = 2; // utilisateurs normaux limités à 1
+        }
+
+        // ✅ Vérifier la limite
+        if (existing.docs.length >= maxPendingReservations) {
+          throw Exception(
+            "Vous avez déjà atteint la limite de $maxPendingReservations réservations en attente. "
+            "Veuillez en payer ou annuler avant d'en créer une nouvelle."
+          );
+        }
 
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final trajetSnap = await tx.get(trajetRef);
@@ -138,15 +167,10 @@ class _ReservationPageState extends State<ReservationPage> {
           throw Exception("Places insuffisantes: $currentPlaces restantes, demandé $placesReservees");
         }
 
-        // Décrémenter les places
-        tx.update(trajetRef, {
-          'places_disponibles': currentPlaces - placesReservees,
-        });
-
-        // Créer la réservation
+        // ⚠️ Ne pas décrémenter immédiatement → attendre paiement
         tx.set(reservationsRef.doc(), {
           'trajetId': widget.trajetId,
-          'userId': user.uid, // ✅ toujours l’UID du réservant
+          'userId': user.uid,
           'reservant_nom': reservantNameController.text.trim(),
           'reservant_tel': reservantPhoneController.text.trim(),
           'pour_autrui': forOther,
@@ -159,7 +183,9 @@ class _ReservationPageState extends State<ReservationPage> {
           'depart_arret': departArret,
           'arrivee_arret': arriveeArret,
           'places_reservees': placesReservees,
-          'status': 'confirmée',
+          'status': 'en attente',          // ✅ en attente tant que pas payé
+          'paymentStatus': 'en attente',   // ✅ paiement non effectué
+          'expiresAt': DateTime.now().add(Duration(minutes: 30)), // délai avant annulation
           'createdAt': FieldValue.serverTimestamp(),
           'horaire': data['horaire'],
           'depart_ville': data['depart'],
@@ -167,7 +193,7 @@ class _ReservationPageState extends State<ReservationPage> {
         });
       });
 
-      _snack("Réservation effectuée ✅");
+      _snack("Réservation créée ✅ En attente de paiement");
       Navigator.pop(context);
     } catch (e) {
       _snack("Erreur: ${e.toString()}");
@@ -293,8 +319,15 @@ class _ReservationPageState extends State<ReservationPage> {
                 ),
                 child: isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Confirmer la réservation"),
+                    : const Text("Créer la réservation (en attente de paiement)"),
               ),
+            ),
+
+            const SizedBox(height: 12),
+            const Text(
+              "Note : la réservation reste en attente jusqu'au paiement. "
+              "Si elle n'est pas payée avant l'expiration, elle sera annulée automatiquement.",
+              style: TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         ),
