@@ -190,6 +190,8 @@ class _ReservationPageState extends State<ReservationPage> {
           'horaire': data['horaire'],
           'depart_ville': data['depart'],
           'destination_ville': data['destination'],
+          'prix': data['prix'], // ✅ ajoute le prix du trajet
+
         });
       });
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // ✅ Import des pages
 import 'package:app_univ_bus/page/login_page.dart';
@@ -22,10 +23,17 @@ class UniBusApp extends StatelessWidget {
     return MaterialApp(
       title: 'UniBus',
       debugShowCheckedModeBanner: false,
+
+      // ✅ Thème global avec Google Fonts + Material 3
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        textTheme: GoogleFonts.poppinsTextTheme(), // ✅ police partout
         useMaterial3: true,
       ),
+
+      // ✅ Dark Mode activé automatiquement
+      darkTheme: ThemeData.dark(useMaterial3: true),
+      themeMode: ThemeMode.system,
 
       // ✅ Point d’entrée
       initialRoute: '/login',

@@ -44,3 +44,19 @@ exports.autoCancelReservations = functions.pubsub
       console.log(`✅ ${snapshot.size} réservations expirées annulées`);
       return null;
     });
+
+exports.initWavePayment = functions.https.onRequest(async (req, res) => {
+  const { reservationId } = req.body;
+  // TODO: appeler l’API Wave
+  await admin.firestore().collection("reservations").doc(reservationId)
+    .update({ paymentStatus: "payé", status: "confirmée" });
+  res.send({ status: "success", method: "Wave" });
+});
+
+exports.initOMPayment = functions.https.onRequest(async (req, res) => {
+  const { reservationId } = req.body;
+  // TODO: appeler l’API Orange Money
+  await admin.firestore().collection("reservations").doc(reservationId)
+    .update({ paymentStatus: "payé", status: "confirmée" });
+  res.send({ status: "success", method: "Orange Money" });
+});

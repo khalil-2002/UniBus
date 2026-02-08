@@ -100,7 +100,7 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
         'depart': departController.text.trim(),
         'destination': destinationController.text.trim(),
         'places_disponibles': int.parse(placesController.text.trim()),
-        'horaire': horaire,
+        'horaire': Timestamp.fromDate(horaire!),
         'arrets_depart': arretsDepart,
         'arrets_arrivee': arretsArrivee,
         'prix': int.parse(prixController.text.trim()), // ✅ nouveau champ

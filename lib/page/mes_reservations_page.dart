@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'qr_ticket_page.dart';
+
 
 class MesReservationsPage extends StatefulWidget {
   const MesReservationsPage({super.key});
@@ -11,6 +13,220 @@ class MesReservationsPage extends StatefulWidget {
 }
 
 class _MesReservationsPageState extends State<MesReservationsPage> {
+ 
+// ✅ Récupérer les réservations de l'utilisateur connecté
+Stream<QuerySnapshot> _getUserReservations() {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    // Si aucun utilisateur n'est connecté, on retourne un Stream vide
+    return const Stream.empty();
+  }
+
+  return FirebaseFirestore.instance
+      .collection('reservations')
+      .where('userId', isEqualTo: user.uid)
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+}
+
+Future<void> _choisirPaiement(
+  String reservationId,
+  String trajetId,
+  int placesReservees,
+  Map<String, dynamic> res,
+) async {
+  // 🔒 Conserver le context parent (IMPORTANT)
+  final parentContext = context;
+
+  // 🔎 Charger le trajet
+  final trajetDoc = await FirebaseFirestore.instance
+      .collection('trajets')
+      .doc(trajetId)
+      .get();
+
+  if (!trajetDoc.exists || trajetDoc.data() == null) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Trajet introuvable")),
+      );
+    }
+    return;
+  }
+
+  final trajetData = trajetDoc.data()!;
+  final double prixTrajet =
+      (trajetData['prix'] is num) ? (trajetData['prix'] as num).toDouble() : 0.0;
+
+  final int nbPlaces = placesReservees > 0 ? placesReservees : 1;
+  final double montant = prixTrajet * nbPlaces;
+
+  if (montant <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Montant invalide")),
+    );
+    return;
+  }
+
+  // ===== ÉTAT DU DIALOG =====
+  bool isProcessing = false;
+  bool isSuccess = false;
+  double progress = 0.0;
+  double cardOpacity = 1.0;
+  String currentAsset = "";
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          Future<void> _simulatePayment(String type, String assetPath) async {
+            if (isProcessing) return;
+
+            setState(() {
+              isProcessing = true;
+              progress = 0.0;
+              isSuccess = false;
+              cardOpacity = 1.0;
+              currentAsset = assetPath;
+            });
+
+            // Animation carte
+            await Future.delayed(const Duration(milliseconds: 600));
+            setState(() => cardOpacity = 0.0);
+
+            // Progression
+            for (int i = 1; i <= 10; i++) {
+              await Future.delayed(const Duration(milliseconds: 220));
+              setState(() => progress = i / 10);
+            }
+
+            setState(() => isSuccess = true);
+            await Future.delayed(const Duration(seconds: 1));
+
+            // 🔴 Fermer le dialog
+            Navigator.of(dialogContext).pop();
+
+            if (!mounted) return;
+
+            ScaffoldMessenger.of(parentContext).showSnackBar(
+              SnackBar(
+                content: Text("Paiement $type de $montant FCFA réussi ✅"),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            // ✅ Validation paiement
+            await _validerPaiement(reservationId, trajetId, nbPlaces);
+
+            if (!mounted) return;
+
+            // ✅ Navigation SAFE après le frame
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Navigator.of(parentContext).push(
+                MaterialPageRoute(
+                  builder: (_) => QRTicketPage(
+                    reservationData: {
+                      "reservationId": reservationId,
+                      "trajetId": trajetId,
+                      "userId":
+                          FirebaseAuth.instance.currentUser?.uid ?? "inconnu",
+                      "places_reservees": nbPlaces,
+                      "depart_arret": res['depart_arret'] ?? 'Inconnu',
+                      "arrivee_arret": res['arrivee_arret'] ?? 'Inconnu',
+                      "horaire": res['horaire'] ?? Timestamp.now(),
+                      "montant": montant,
+                    },
+                  ),
+                ),
+              );
+            });
+          }
+
+          return WillPopScope(
+            onWillPop: () async => !isProcessing,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text("Paiement sécurisé"),
+              content: SingleChildScrollView(
+                child: isProcessing
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedOpacity(
+                            duration: const Duration(milliseconds: 500),
+                            opacity: cardOpacity,
+                            child: Image.asset(
+                              currentAsset,
+                              height: 60,
+                              errorBuilder: (_, __, ___) =>
+                                  const Icon(Icons.payment, size: 48),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          LinearProgressIndicator(value: progress),
+                          const SizedBox(height: 16),
+                          isSuccess
+                              ? const Icon(Icons.check_circle,
+                                  color: Colors.green, size: 42)
+                              : const Text("Traitement du paiement..."),
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "Montant à payer : $montant FCFA",
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 16),
+
+                          GestureDetector(
+                            onTap: () =>
+                                _simulatePayment("Wave", "assets/wave.jpeg"),
+                            child:
+                                _paymentTile("assets/wave.jpeg", "Wave", Colors.blue),
+                          ),
+
+                          GestureDetector(
+                            onTap: () => _simulatePayment(
+                                "Orange Money", "assets/OM.jpeg"),
+                            child: _paymentTile(
+                                "assets/OM.jpeg", "OM", Colors.orange),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+Widget _paymentTile(String asset, String label, Color color) {
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(14),
+      color: color.withOpacity(0.12),
+    ),
+    child: Row(
+      children: [
+        Image.asset(asset, height: 40,
+            errorBuilder: (_, __, ___) => const Icon(Icons.payment)),
+        const SizedBox(width: 12),
+        Text(label, style: const TextStyle(fontSize: 16)),
+      ],
+    ),
+  );
+}
+
   String _selectedStatus = "toutes";
 
   // ✅ Couleur selon statut
@@ -32,97 +248,116 @@ class _MesReservationsPageState extends State<MesReservationsPage> {
       default: return Icons.help;
     }
   }
-  // ✅ Validation du paiement
-  Future<void> _validerPaiement(String reservationId, String trajetId, int placesReservees) async {
-    try {
-      final trajetRef = FirebaseFirestore.instance.collection('trajets').doc(trajetId);
-      final reservationRef = FirebaseFirestore.instance.collection('reservations').doc(reservationId);
+  // ✅ Validation du paiement (ne touche PAS aux places)
+Future<void> _validerPaiement(
+  String reservationId,
+  String trajetId,
+  int placesReservees,
+) async {
+  try {
+    final trajetRef =
+        FirebaseFirestore.instance.collection('trajets').doc(trajetId);
+    final reservationRef =
+        FirebaseFirestore.instance.collection('reservations').doc(reservationId);
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final trajetSnap = await transaction.get(trajetRef);
-        if (!trajetSnap.exists) throw Exception("Trajet introuvable");
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final trajetSnap = await transaction.get(trajetRef);
+      final reservationSnap = await transaction.get(reservationRef);
 
-        int placesDispo = trajetSnap['places_disponibles'] ?? 0;
+      if (!trajetSnap.exists || !reservationSnap.exists) {
+        throw Exception("Données introuvables");
+      }
 
-        if (placesDispo <= 0) throw Exception("Aucune place disponible pour ce trajet");
-        if (placesDispo < placesReservees) throw Exception("Pas assez de places disponibles (restantes: $placesDispo)");
+      final reservationData =
+          reservationSnap.data() as Map<String, dynamic>?;
 
-        transaction.update(trajetRef, {'places_disponibles': placesDispo - placesReservees});
-        transaction.update(reservationRef, {'paymentStatus': 'payé', 'status': 'confirmée'});
+      final paymentStatus =
+          reservationData?['paymentStatus'] ?? 'en attente';
+
+      // 🔒 Anti double paiement
+      if (paymentStatus == 'payé') {
+        throw Exception("Paiement déjà effectué");
+      }
+
+      final trajetData = trajetSnap.data() as Map<String, dynamic>?;
+
+      int placesDispo =
+          (trajetData?['places_disponibles'] is int)
+              ? trajetData!['places_disponibles']
+              : 0;
+
+      if (placesDispo < placesReservees) {
+        throw Exception("Pas assez de places disponibles");
+      }
+
+      transaction.update(trajetRef, {
+        'places_disponibles': placesDispo - placesReservees,
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Paiement validé ✅ Réservation confirmée")),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
-      }
+      transaction.update(reservationRef, {
+        'paymentStatus': 'payé',
+        'status': 'confirmée',
+      });
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Paiement validé ✅ Réservation confirmée"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur paiement : $e")),
+      );
     }
   }
+}
 
-  // ✅ Récupérer les réservations de l'utilisateur connecté
-  Stream<QuerySnapshot> _getUserReservations() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const Stream.empty();
-    return FirebaseFirestore.instance
-        .collection('reservations')
-        .where('userId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots();
-  }
 
   // ✅ Mise à jour sécurisée
-  Future<void> _updateStatus(String docId, String trajetId, String newStatus,
-      int placesReservees, String paymentStatus) async {
-    try {
-      final trajetRef = FirebaseFirestore.instance.collection('trajets').doc(trajetId);
-      final reservationRef = FirebaseFirestore.instance.collection('reservations').doc(docId);
+ Future<void> _updateStatus(
+  String docId,
+  String trajetId,
+  String newStatus,
+  int placesReservees,
+  String paymentStatus,
+) async {
+  try {
+    final reservationRef =
+        FirebaseFirestore.instance.collection('reservations').doc(docId);
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final trajetSnap = await transaction.get(trajetRef);
-        if (!trajetSnap.exists) throw Exception("Trajet introuvable");
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final reservationSnap = await transaction.get(reservationRef);
+      if (!reservationSnap.exists) {
+        throw Exception("Réservation introuvable");
+      }
 
-        final reservationSnap = await transaction.get(reservationRef);
-        if (!reservationSnap.exists) throw Exception("Réservation introuvable");
+      if (newStatus == "confirmée" && paymentStatus != "payé") {
+        throw Exception("Paiement requis avant confirmation");
+      }
 
-        int placesDispo = trajetSnap['places_disponibles'] ?? 0;
-        final expiresAt = (reservationSnap['expiresAt'] as Timestamp?)?.toDate();
-        final currentStatus = reservationSnap['status'] ?? 'en attente';
-
-        if (expiresAt != null && DateTime.now().isAfter(expiresAt) && currentStatus == "en attente") {
-          throw Exception("Réservation expirée, impossible de confirmer");
-        }
-        if (newStatus == "confirmée" && paymentStatus != "payé") {
-          throw Exception("Paiement requis avant confirmation");
-        }
-
-        if (newStatus == "annulée" || newStatus == "en attente") {
-          placesDispo += placesReservees;
-        } else if (newStatus == "confirmée") {
-          if (placesDispo <= 0) throw Exception("Impossible de confirmer : aucune place disponible");
-          if (placesDispo >= placesReservees) {
-            placesDispo -= placesReservees;
-          } else {
-            throw Exception("Pas assez de places disponibles (restantes: $placesDispo)");
-          }
-        }
-
-        transaction.update(trajetRef, {'places_disponibles': placesDispo});
-        transaction.update(reservationRef, {'status': newStatus});
+      transaction.update(reservationRef, {
+        'status': newStatus,
       });
+    });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Statut changé en $newStatus ✅")));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Statut changé en $newStatus ✅")),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur: $e")),
+      );
     }
   }
+}
 
   // ✅ Confirmation avant action
   void _confirmAction(String docId, String trajetId, String newStatus,
@@ -257,8 +492,9 @@ class _MesReservationsPageState extends State<MesReservationsPage> {
                               "Statut: $status\n"
                               "Horaire: ${horaire != null ? DateFormat('dd/MM/yyyy HH:mm').format(horaire) : 'Non défini'}",
                             ),
-                            trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
+                            trailing: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
                             children: [
                               // 🔴 Bouton Annuler (si pas déjà annulée)
                               if (status != "annulée")
@@ -285,7 +521,11 @@ class _MesReservationsPageState extends State<MesReservationsPage> {
                                 ),
 
                               // 💳 Bouton Payer ou indicateur Complet
-                              if (paymentStatus == "en attente" && res['userId'] == currentUser?.uid)
+                              if (
+                                  status == "en attente" &&
+                                  paymentStatus == "en attente" &&
+                                  res['userId'] == currentUser?.uid
+                                )
                                 (res['places_disponibles'] != null &&
                                 (res['places_reservees'] ?? 1) > (res['places_disponibles'] ?? 0))
                                   ? const Chip(
@@ -295,12 +535,28 @@ class _MesReservationsPageState extends State<MesReservationsPage> {
                                     )
                                   : IconButton(
                                       icon: const Icon(Icons.payment, color: Colors.blue),
-                                      onPressed: () => _validerPaiement(
-                                        doc.id, trajetId, placesReservees),
+                                      onPressed: () => _choisirPaiement(doc.id, trajetId, placesReservees,res),
                                     ),
+                                    if (status == "confirmée" && paymentStatus == "payé")
+                            IconButton(
+                              icon: const Icon(Icons.qr_code, color: Colors.black),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => QRTicketPage(
+                                      reservationData: {
+                                        ...res,
+                                        "reservationId": doc.id,
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+
                             ],
                           ),
-
                           ),
                         );
                       }),
