@@ -7,7 +7,7 @@ class MyTransparentTextField extends StatefulWidget {
   final bool isPassword;
   final TextInputType keyboardType;
   final TextEditingController? controller;
-  final TextInputAction textInputAction; // ✅ nouvelle propriété
+  final TextInputAction textInputAction;
 
   const MyTransparentTextField({
     super.key,
@@ -17,7 +17,7 @@ class MyTransparentTextField extends StatefulWidget {
     this.hinttext = "Pas de hint",
     this.isPassword = false,
     this.keyboardType = TextInputType.text,
-    this.textInputAction = TextInputAction.done, // ✅ valeur par défaut
+    this.textInputAction = TextInputAction.done,
   });
 
   @override
@@ -38,14 +38,12 @@ class _MyTransparentTextFieldState extends State<MyTransparentTextField> {
         controller: widget.controller,
         obscureText: widget.isPassword ? _obscureText : false,
         keyboardType: widget.keyboardType,
-        textInputAction: widget.textInputAction, // ✅ correction
-
+        textInputAction: widget.textInputAction,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 18,
           fontWeight: FontWeight.w400,
         ),
-
         decoration: InputDecoration(
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 10),

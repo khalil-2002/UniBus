@@ -35,40 +35,64 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 double fabX = 20; // horizontale
 double fabY = 500; // verticale
 
+String? userName;
+String? userRole;
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
 
-    // NavigationBar rebond
-    _navController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _navScale = Tween<double>(begin: 1, end: 1.2).animate(
-      CurvedAnimation(parent: _navController, curve: Curves.elasticOut),
-    );
+  // NavigationBar rebond
+  _navController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+  );
+  _navScale = Tween<double>(begin: 1, end: 1.2).animate(
+    CurvedAnimation(parent: _navController, curve: Curves.elasticOut),
+  );
 
-    // FAB animation
-    _fabController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
+  // FAB animation
+  _fabController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 500),
+  );
 
-    // Accueil fade + slide
-    _homeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _fadeAnimation = CurvedAnimation(parent: _homeController, curve: Curves.easeIn);
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _homeController, curve: Curves.easeOut));
+  // Accueil fade + slide
+  _homeController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800),
+  );
 
-    _homeController.forward();
-    _fabController.forward();
-  }
+  _fadeAnimation = CurvedAnimation(
+    parent: _homeController,
+    curve: Curves.easeIn,
+  );
+
+  _slideAnimation = Tween<Offset>(
+    begin: const Offset(0, 0.15),
+    end: Offset.zero,
+  ).animate(
+    CurvedAnimation(parent: _homeController, curve: Curves.easeOut),
+  );
+
+  _homeController.forward();
+  _fabController.forward();
+
+  // Charger nom + rôle depuis Firestore
+  final user = FirebaseAuth.instance.currentUser;
+if (user != null) {
+  FirebaseFirestore.instance.collection('users').doc(user.uid).get().then((doc) {
+    if (doc.exists) {
+      final data = doc.data()!;
+      setState(() {
+        userName = data['nom'] ?? "Utilisateur";
+        userRole = data['role'] ?? "user"; // ✅ récupère bien le rôle
+      });
+    }
+  });
+}
+
+}
 
   @override
   void dispose() {
@@ -85,7 +109,6 @@ double fabY = 500; // verticale
   }
   // ================= ACCUEIL =================
   Widget _buildAccueil() {
-    final user = FirebaseAuth.instance.currentUser;
     final todayStr = DateFormat('dd MMMM yyyy').format(DateTime.now());
 
     final startOfDay = DateTime.now();
@@ -146,17 +169,39 @@ double fabY = 500; // verticale
                                 color: Colors.white70,
                               ),
                             ),
-                            Text(
-                              user?.email ?? "Utilisateur",
-                              style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                              shadows: [Shadow(color: Colors.black54, blurRadius: 2)], // ✅ lisibilité renforcée
-                            ),
+                           
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      userName ?? "Utilisateur",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                        shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
+                                      ),
+                                      overflow: TextOverflow.ellipsis, // ✅ coupe si trop long
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Chip(
+                                    label: Text(
+                                      (userRole == "admin") ? "Admin" : "User",
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
+                                    backgroundColor: (userRole == "admin")
+                                        ? Colors.blue.shade100
+                                        : Colors.green.shade100,
+                                    labelStyle: TextStyle(
+                                      color: (userRole == "admin")
+                                          ? Colors.blue.shade900
+                                          : Colors.green.shade900,
+                                    ),
+                                  ),
+                                ],
+                              ),
 
-                              overflow: TextOverflow.ellipsis, // ✅ coupe si trop long
-                            ),
                             Text(
                               todayStr,
                               style: GoogleFonts.poppins(

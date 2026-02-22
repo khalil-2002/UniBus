@@ -16,7 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
-  bool showPassword = false;
+  String? errorMessage; // ✅ message inline sous les champs
 
   @override
   void dispose() {
@@ -25,32 +25,33 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  /// 🔑 Affichage des messages SnackBar
-  void _showMessage(String text, Color color) {
+  /// 🔑 Affichage SnackBar global
+  void _showSnack(String text, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(text), backgroundColor: color),
     );
   }
 
-  /// 🔑 Connexion avec récupération du rôle
+  /// 🔑 Connexion avec gestion des erreurs
   Future<void> _login() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
+    setState(() => errorMessage = null);
+
     if (email.isEmpty || password.isEmpty) {
-      _showMessage("Veuillez remplir tous les champs", Colors.red);
+      setState(() => errorMessage = "Veuillez remplir tous les champs");
       return;
     }
 
-    // Validation email simple
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
     if (!emailRegex.hasMatch(email)) {
-      _showMessage("Adresse e-mail invalide", Colors.red);
+      setState(() => errorMessage = "Adresse e-mail invalide");
       return;
     }
 
     if (password.length < 6) {
-      _showMessage("Le mot de passe doit contenir au moins 6 caractères", Colors.red);
+      setState(() => errorMessage = "Le mot de passe doit contenir au moins 6 caractères");
       return;
     }
 
@@ -68,46 +69,44 @@ class _LoginPageState extends State<LoginPage> {
 
         final role = snap.data()?['role'] ?? 'user';
 
-        _showMessage("Connexion réussie ✅", Colors.green);
+        _showSnack("Connexion réussie ✅", Colors.green);
 
-        // ✅ Navigation avec routes définies dans main.dart
         Navigator.pushReplacementNamed(context, '/home', arguments: role);
       }
     } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'user-not-found':
-          message = "Utilisateur introuvable";
-          break;
-        case 'wrong-password':
-          message = "Mot de passe incorrect";
-          break;
-        case 'invalid-email':
-          message = "Email invalide";
-          break;
-        default:
-          message = "Erreur : ${e.message}";
-      }
-      _showMessage(message, Colors.red);
+      setState(() {
+        switch (e.code) {
+          case 'user-not-found':
+            errorMessage = "Utilisateur introuvable";
+            break;
+          case 'wrong-password':
+            errorMessage = "Mot de passe incorrect";
+            break;
+          case 'invalid-email':
+            errorMessage = "Email invalide";
+            break;
+          default:
+            errorMessage = "Erreur : ${e.message}";
+        }
+      });
     } catch (e) {
-      _showMessage("Erreur inattendue : ${e.toString()}", Colors.red);
+      setState(() => errorMessage = "Erreur inattendue");
     } finally {
       setState(() => isLoading = false);
     }
   }
 
-  /// 🔑 Réinitialisation du mot de passe
   Future<void> _resetPassword() async {
     final email = emailController.text.trim();
     if (email.isEmpty) {
-      _showMessage("Entrez votre email pour réinitialiser", Colors.red);
+      setState(() => errorMessage = "Entrez votre email pour réinitialiser");
       return;
     }
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      _showMessage("Email de réinitialisation envoyé ✅", Colors.green);
+      _showSnack("Email de réinitialisation envoyé ✅", Colors.green);
     } catch (e) {
-      _showMessage("Erreur : ${e.toString()}", Colors.red);
+      setState(() => errorMessage = "Impossible d’envoyer l’email de réinitialisation");
     }
   }
 
@@ -162,56 +161,40 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Champ Mot de passe avec bouton 👁️
-                  TextField(
+                  // Champ Mot de passe
+                  MyTransparentTextField(
                     controller: passwordController,
-                    obscureText: !showPassword,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.lock, color: Colors.white),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          showPassword ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.white,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            showPassword = !showPassword;
-                          });
-                        },
-                      ),
-                      labelText: "Mot de passe",
-                      labelStyle: const TextStyle(color: Colors.white),
-                      hintText: "Entrez votre mot de passe",
-                      hintStyle: const TextStyle(color: Colors.white70),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.2),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+                    prefixIcon: Icons.lock,
+                    labeltext: "Mot de passe",
+                    hinttext: "Entrez votre mot de passe",
+                    isPassword: true,
+                    textInputAction: TextInputAction.done,
                   ),
+
+                  // ✅ Message d’erreur inline
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      errorMessage!,
+                      style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+                    ),
+                  ],
 
                   const SizedBox(height: 30),
 
                   // Mot de passe oublié
-                  Container(
-                    width: double.infinity,
-                    alignment: Alignment.bottomRight,
+                  Align(
+                    alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: _resetPassword,
                       child: const Text(
                         "Mot de passe oublié ?",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w300,
-                        ),
+                        style: TextStyle(color: Colors.white70),
                       ),
                     ),
                   ),
 
-                  // Bouton Se connecter
+                  // Bouton Se connecter dynamique
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -224,13 +207,24 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       onPressed: isLoading ? null : _login,
-                      child: isLoading
-                          ? const CircularProgressIndicator(color: Colors.indigo)
-                          : const Text(
-                              "Se connecter",
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: isLoading
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  CircularProgressIndicator(color: Colors.indigo),
+                                  SizedBox(width: 12),
+                                  Text("Connexion en cours...",
+                                      style: TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              )
+                            : const Text(
+                                "Se connecter",
+                                style: TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                      ),
                     ),
                   ),
 

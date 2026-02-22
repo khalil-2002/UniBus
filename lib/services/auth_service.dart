@@ -21,6 +21,20 @@ class AuthService {
       }
     }
   }
+  /// Réinitialisation du mot de passe
+Future<void> resetPassword(String email) async {
+  try {
+    await _auth.sendPasswordResetEmail(email: email);
+  } catch (e) {
+    throw Exception("Erreur lors de la réinitialisation : ${e.toString()}");
+  }
+}
+/// Envoi d'email de vérification
+Future<void> sendEmailVerification(User user) async {
+  if (!user.emailVerified) {
+    await user.sendEmailVerification();
+  }
+}
 
   /// Inscription (création de compte)
   Future<User?> register(String email, String password) async {
@@ -40,6 +54,14 @@ class AuthService {
       }
     }
   }
+  /// Suppression du compte utilisateur
+  Future<void> deleteAccount() async {
+  final user = _auth.currentUser;
+  if (user != null) {
+    await user.delete();
+  }
+}
+
 
   /// Déconnexion
   Future<void> logout() async {
