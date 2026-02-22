@@ -123,7 +123,7 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Ajouter un trajet"), backgroundColor: Colors.indigo),
+      appBar: AppBar(title: const Text("Ajouter un trajet", style: TextStyle(color: Colors.white)), backgroundColor: Colors.indigo),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
@@ -148,7 +148,7 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
               trailing: ElevatedButton(
                 onPressed: () => _selectHoraire(context),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                child: const Text("Calendrier"),
+                child: const Text("Calendrier", style: TextStyle(color: Colors.white))
               ),
             ),
 
@@ -166,7 +166,9 @@ class _AddTrajetPageState extends State<AddTrajetPage> {
             ElevatedButton(
               onPressed: isLoading ? null : _saveTrajet,
               style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, padding: const EdgeInsets.symmetric(vertical: 14)),
-              child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Enregistrer le trajet"),
+
+              child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Enregistrer le trajet", style: TextStyle(color: Colors.white))
+              
             ),
           ],
         ),

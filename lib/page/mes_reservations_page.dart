@@ -188,14 +188,14 @@ Future<void> _choisirPaiement(
                             onTap: () =>
                                 _simulatePayment("Wave", "assets/wave.jpeg"),
                             child:
-                                _paymentTile("assets/wave.jpeg", "Wave", Colors.blue),
+                                _paymentTile("assets/wave.jpeg", "Wave", const Color.fromARGB(255, 255, 255, 255)),
                           ),
 
                           GestureDetector(
                             onTap: () => _simulatePayment(
                                 "Orange Money", "assets/OM.jpeg"),
                             child: _paymentTile(
-                                "assets/OM.jpeg", "OM", Colors.orange),
+                                "assets/OM.jpeg", "OM",  const Color.fromARGB(255, 255, 255, 255)),
                           ),
                         ],
                       ),
@@ -248,7 +248,7 @@ Widget _paymentTile(String asset, String label, Color color) {
       default: return Icons.help;
     }
   }
-  // ✅ Validation du paiement (ne touche PAS aux places)
+  // ✅ Validation du paiement ()
 Future<void> _validerPaiement(
   String reservationId,
   String trajetId,
@@ -268,28 +268,25 @@ Future<void> _validerPaiement(
         throw Exception("Données introuvables");
       }
 
-      final reservationData =
-          reservationSnap.data() as Map<String, dynamic>?;
+      final reservationData = reservationSnap.data() as Map<String, dynamic>? ?? {};
+      final trajetData = trajetSnap.data() as Map<String, dynamic>? ?? {};
 
-      final paymentStatus =
-          reservationData?['paymentStatus'] ?? 'en attente';
+      final paymentStatus = reservationData['paymentStatus'] ?? 'en attente';
+      int placesDispo = (trajetData['places_disponibles'] is int)
+          ? trajetData['places_disponibles']
+          : 0;
 
       // 🔒 Anti double paiement
       if (paymentStatus == 'payé') {
         throw Exception("Paiement déjà effectué");
       }
 
-      final trajetData = trajetSnap.data() as Map<String, dynamic>?;
-
-      int placesDispo =
-          (trajetData?['places_disponibles'] is int)
-              ? trajetData!['places_disponibles']
-              : 0;
-
+      // ✅ Vérifier les places avant de confirmer
       if (placesDispo < placesReservees) {
         throw Exception("Pas assez de places disponibles");
       }
 
+      // ✅ Retirer les places et confirmer la réservation
       transaction.update(trajetRef, {
         'places_disponibles': placesDispo - placesReservees,
       });
@@ -329,17 +326,47 @@ Future<void> _validerPaiement(
   try {
     final reservationRef =
         FirebaseFirestore.instance.collection('reservations').doc(docId);
+    final trajetRef =
+        FirebaseFirestore.instance.collection('trajets').doc(trajetId);
 
     await FirebaseFirestore.instance.runTransaction((transaction) async {
       final reservationSnap = await transaction.get(reservationRef);
-      if (!reservationSnap.exists) {
-        throw Exception("Réservation introuvable");
-      }
+      final trajetSnap = await transaction.get(trajetRef);
 
+      if (!reservationSnap.exists) throw Exception("Réservation introuvable");
+      if (!trajetSnap.exists) throw Exception("Trajet introuvable");
+
+      final reservationData = reservationSnap.data() as Map<String, dynamic>? ?? {};
+      final trajetData = trajetSnap.data() as Map<String, dynamic>? ?? {};
+
+      int placesDispo = (trajetData['places_disponibles'] is int)
+          ? trajetData['places_disponibles']
+          : 0;
+
+      final currentStatus = reservationData['status'] ?? 'en attente';
+
+      // ✅ Paiement requis avant confirmation
       if (newStatus == "confirmée" && paymentStatus != "payé") {
         throw Exception("Paiement requis avant confirmation");
       }
 
+      // ✅ Gestion des places
+      if (newStatus == "annulée" && currentStatus == "confirmée") {
+        // Annulation → remettre les places
+        transaction.update(trajetRef, {
+          'places_disponibles': placesDispo + placesReservees,
+        });
+      } else if (newStatus == "confirmée" && currentStatus != "confirmée") {
+        // Confirmation → retirer les places
+        if (placesDispo < placesReservees) {
+          throw Exception("Pas assez de places disponibles");
+        }
+        transaction.update(trajetRef, {
+          'places_disponibles': placesDispo - placesReservees,
+        });
+      }
+
+      // ✅ Mise à jour du statut
       transaction.update(reservationRef, {
         'status': newStatus,
       });

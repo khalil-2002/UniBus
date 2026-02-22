@@ -120,7 +120,7 @@ class _EditTrajetPageState extends State<EditTrajetPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Modifier un trajet"), backgroundColor: Colors.indigo),
+      appBar: AppBar(title: const Text("Modifier un trajet", style: TextStyle(color: Colors.white)), backgroundColor: Colors.indigo),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -157,7 +157,7 @@ class _EditTrajetPageState extends State<EditTrajetPage> {
                 trailing: ElevatedButton(
                   onPressed: () => _selectHoraire(context),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                  child: const Text("Calendrier"),
+                  child: const Text("Calendrier", style: TextStyle(color: Colors.white)),
                 ),
               ),
 
@@ -175,7 +175,7 @@ class _EditTrajetPageState extends State<EditTrajetPage> {
               ElevatedButton(
                 onPressed: isLoading ? null : _updateTrajet,
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Mettre à jour le trajet"),
+                child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Mettre à jour le trajet", style: TextStyle(color: Colors.white)),
               ),
             ],
           ),

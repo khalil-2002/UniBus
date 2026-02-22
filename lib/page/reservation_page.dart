@@ -320,8 +320,8 @@ class _ReservationPageState extends State<ReservationPage> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Créer la réservation (en attente de paiement)"),
+                    ? const CircularProgressIndicator(color: Color.fromARGB(255, 0, 0, 0))
+                    : const Text("Créer la réservation", style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
               ),
             ),
 
@@ -329,8 +329,7 @@ class _ReservationPageState extends State<ReservationPage> {
             const Text(
               "Note : la réservation reste en attente jusqu'au paiement. "
               "Si elle n'est pas payée avant l'expiration, elle sera annulée automatiquement.",
-              style: TextStyle(fontSize: 12, color: Colors.black54),
-            ),
+              style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
           ],
         ),
       ),

@@ -10,6 +10,7 @@ import 'mes_reservations_page.dart';
 import 'profil_page.dart';
 import 'add_trajet_page.dart';
 
+
 class HomePage extends StatefulWidget {
   final String role;
   const HomePage({super.key, required this.role});
@@ -30,6 +31,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
   late final Animation<double> _navScale;
+  // Position initiale du bouton
+double fabX = 20; // horizontale
+double fabY = 500; // verticale
+
 
   @override
   void initState() {
@@ -344,22 +349,57 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
 
       // ✅ Transition fluide entre pages
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.08, 0),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
+      body: Stack(
+  children: [
+    // ✅ Ton contenu principal avec transition fluide
+    AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.08, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: pages[_selectedIndex],
+    ),
+
+    // ✅ FAB déplaçable et fixé
+    if (widget.role == "admin" && (_selectedIndex == 0 || _selectedIndex == 1))
+      Positioned(
+        left: fabX,
+        top: fabY,
+        child: GestureDetector(
+          onPanUpdate: (details) {
+            setState(() {
+              fabX += details.delta.dx;
+              fabY += details.delta.dy;
+            });
+          },
+          child: ScaleTransition(
+            scale: CurvedAnimation(parent: _fabController, curve: Curves.elasticOut),
+            child: FloatingActionButton.extended(
+              backgroundColor: Colors.indigo,
+              icon: const Icon(Icons.add),
+              label: const Text("Ajouter un trajet"),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddTrajetPage()),
+                );
+                _onTabChange(1);
+              },
             ),
-          );
-        },
-        child: pages[_selectedIndex],
+          ),
+        ),
       ),
+  ],
+),
 
       // ✅ NavigationBar modernisée
       bottomNavigationBar: NavigationBar(
@@ -375,26 +415,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ],
       ),
 
-      // ✅ FAB animé pour admin
-      floatingActionButton: widget.role == "admin"
-          ? ScaleTransition(
-              scale: CurvedAnimation(
-                  parent: _fabController, curve: Curves.elasticOut),
-              child: FloatingActionButton.extended(
-                backgroundColor: Colors.indigo,
-                icon: const Icon(Icons.add),
-                label: const Text("Ajouter un trajet"),
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const AddTrajetPage()),
-                  );
-                  _onTabChange(1);
-                },
-              ),
-            )
-          : null,
+          
     );
   }
   // ================= NAV ITEM =================
